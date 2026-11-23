@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PSSA Student Performance</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>PSSA Student Performance</h1>
+          <p>Search assessments and identify students who need practice on a skill.</p>
+        </div>
+        <form method="post" action="{{ url_for('logout') }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+          <button type="submit" class="secondary">Log out</button>
+        </form>
+      </header>
+
+      {% if error %}
+      <p class="error" role="alert">{{ error }}</p>
+      {% endif %}
+
+      <section>
+        <h2>1. Search students</h2>
+        <p>Enter 1+ local student ID(s), or use filters to search all students.</p>
+        <form method="get" action="{{ url_for('index') }}">
+          <input type="hidden" name="mode" value="students" />
+          <label for="search-ids">Student IDs(separated by commas/spaces)</label>
+          <textarea
+            id="search-ids"
+            name="student_ids"
+            rows="2"
+            placeholder="12345, 67890"
+          >{{ ids_text if mode == 'students' else '' }}</textarea>
+          <div class="filters">
+            <label>
+              Year
+              <select name="year">
+                <option value="">All years</option>
+                {% for y in years %}
+                <option
+                  value="{{ y }}"
+                  {% if mode == 'students' and year == y|string %}selected{% endif %}
+                >
+                  {{ y }}
+                </option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              Grade
+              <select name="grade">
+                <option value="">All grades</option>
+                {% for g in range(3, 9) %}
+                <option
+                  value="{{ g }}"
+                  {% if mode == 'students' and grade == g|string %}selected{% endif %}
+                >
+                  {{ g }}
+                </option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              Subject
+              <select name="subject">
+                <option value="">All subjects</option>
+                {% for code, name in subjects.items() %}
+                <option
+                  value="{{ code }}"
+                  {% if mode == 'students' and subject == code %}selected{% endif %}
+                >
+                  {{ name }}
+                </option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+          <button type="submit">Search students</button>
+        </form>
+        {% if mode == 'students' and not error %}
+        <h3>Assessment results</h3>
+        <p>Showing up to 500 records. Use more filters to narrow the list.</p>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Year</th>
+                <th>Grade</th>
+                <th>Subject</th>
+                <th>Scale score</th>
+                <th>Performance</th>
+                <th>Total raw score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in assessments %}
+              <tr>
+                <td>{{ row.local_student_id }}</td>
+                <td>{{ row.year }}</td>
+                <td>{{ row.grade }}</td>
+                <td>{{ subjects.get(row.subject, row.subject) }}</td>
+                <td>{{ row.scale_score if row.scale_score is not none else '—' }}</td>
+                <td>{{ row.performance_level_name or '—' }}</td>
+                <td>{{ row.total_raw_score if row.total_raw_score is not none else '—' }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="7">No matching assessments found.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </section>
+
+      <section>
+        <h2>2. Find students struggling with a skill</h2>
+        <p>
+          Choose a year, grade, and subject, then load available anchors. After
+          selecting an anchor, students are listed from lowest score to
+          highest.
+        </p>
+        <form method="get" action="{{ url_for('index') }}">
+          <div class="filters">
+            <label>
+              Year
+              <select name="year" required>
+                <option value="">Choose year</option>
+                {% for y in years %}
+                <option
+                  value="{{ y }}"
+                  {% if mode in ('skills', 'rank') and year == y|string %}selected{% endif %}
+                >
+                  {{ y }}
+                </option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              Grade
+              <select name="grade" required>
+                <option value="">Choose grade</option>
+                {% for g in range(3, 9) %}
+                <option
+                  value="{{ g }}"
+                  {% if mode in ('skills', 'rank') and grade == g|string %}selected{% endif %}
+                >
+                  {{ g }}
+                </option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              Subject
+              <select name="subject" required>
+                <option value="">Choose subject</option>
+                {% for code, name in subjects.items() %}
+                <option
+                  value="{{ code }}"
+                  {% if mode in ('skills', 'rank') and subject == code %}selected{% endif %}
+                >
+                  {{ name }}
+                </option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+          <label for="rank-ids"
+            >Only these student IDs (leave blank for everyone)</label
+          >
+          <textarea
+            id="rank-ids"
+            name="student_ids"
+            rows="2"
+            placeholder="Leave blank for all students"
+          >{{ ids_text if mode in ('skills', 'rank') else '' }}</textarea>
+          <button type="submit" name="mode" value="skills" class="secondary">
+            Load skills
+          </button>
+          {% if mode in ('skills', 'rank') and anchors %}
+          <label for="anchor">Skill / anchor</label>
+          <select id="anchor" name="anchor" required>
+            <option value="">Choose an anchor</option>
+            {% for a in anchors %}
+            <option
+              value="{{ a.anchor_code }}"
+              {% if anchor == a.anchor_code|string %}selected{% endif %}
+            >
+              {{ a.anchor_code }} — {{ a.description or 'No description available' }}
+            </option>
+            {% endfor %}
+          </select>
+          <button type="submit" name="mode" value="rank">
+            Find lowest scores
+          </button>
+          {% elif mode in ('skills', 'rank') and not error %}
+          <p>No anchors found for that year, grade, and subject.</p>
+          {% endif %}
+        </form>
+        {% if mode == 'rank' and not error %}
+        <h3>Lowest scores for anchor {{ anchor }}</h3>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Raw anchor score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in students %}
+              <tr>
+                <td>{{ row.student_id }}</td>
+                <td>{{ row.score }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="3">No scored students found for this anchor.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </section>
+      <footer>
+        Email juliasorgen@gmail.com with any issues/feedback.
+      </footer>
+    </main>
+  </body>
+</html>
