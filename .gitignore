@@ -1,3 +1,6 @@
 file_cleaning/
 .venv/
 preupload/
+__pycache__/
+*.pyc
+terminal.txt
